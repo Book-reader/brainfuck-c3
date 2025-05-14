@@ -6,7 +6,7 @@ alias Program = List {Token};
 
 enum TokenType : char (char tok)
 {
-	// READ = '\0',
+	GET = '\0',
 	INC = '+',
 	DEC = '-',
 	NEXT = '>',
@@ -16,7 +16,7 @@ enum TokenType : char (char tok)
 	LOOP_S = '[',
 	LOOP_E = ']',
 	// Don't check for i < array_len each time, instead append EOF to end of instructions and make it call break;
-	// EOF = '\0',
+	EOF = '\0',
 }
 
 struct Token
@@ -29,64 +29,80 @@ const MEM_SIZE = 30000;
 
 usz mem_ptr;
 char[MEM_SIZE] mem;
-
-extern fn CInt putchar(char ch);
+Token tok;
+usz prog_idx;
+Program prog;
 
 fn int main(String[] args)
 {
-	String input = "++++++++[>+++++++++>+++++++++++++>++++++>++++>+++++++++++<<<<<-]>.>---.+++++++..+++.>----.>.>-.<<<.+++.------.--------.>>+.";
-	Program prog;
+	// String input = "++++++++[>+++++++++>+++++++++++++>++++++>++++>+++++++++++<<<<<-]>.>---.+++++++..+++.>----.>.>-.<<<.+++.------.--------.>>+.";
+	String input = (String)file::load(allocator::mem, args[1])!!;
 	prog.init(allocator::mem);
 	defer prog.free();
 
 
 	foreach (ch : input)
 	{
-		if (prog.len() > 0 && prog[^1].type.tok == ch && ch != '[' && ch != ']' && prog[^1].repeats < char.max)
+		if (@ok(@enum_from_value(TokenType, tok, ch)) && ch != '\0')
 		{
-			prog[^1].repeats ++;
-		}
-		else
-		{
-			prog.push({1, @enum_from_value(TokenType, tok, ch)!!});
+			if (prog.len() > 0 && prog[^1].type.tok == ch && ch != '[' && ch != ']' && prog[^1].repeats < char.max)
+			{
+				prog[^1].repeats ++;
+			}
+			else
+			{
+				prog.push({1, @enum_from_value(TokenType, tok, ch)!!});
+			}
 		}
 	}
+	prog.push({0, EOF});
 
-	for (usz i = 0, usz len = prog.len(); i < len; i++)
+	// while OUTER: (true){
+	switch (TokenType.GET) @jump
 	{
-		Token tok = prog[i];
-		debug("Prog ptr: %s", mem_ptr);
-		debug("Mem: %s", mem[:20]);
-		debug("Token type at %s: %s, %s", i, tok.type, tok.repeats);
-		switch (tok.type)
-		{
-			case INC: mem[mem_ptr] += tok.repeats;
-			case DEC: mem[mem_ptr] -= tok.repeats;
-			case NEXT:
-				mem_ptr += tok.repeats;
-				if (mem_ptr >= MEM_SIZE) mem_ptr -= MEM_SIZE;
-			case PREV:
-				if (mem_ptr >= tok.repeats)
-				{
-					mem_ptr -= tok.repeats;
-				}
-				else
-				{
-abort();
-					// TODO: probably wrong
-					mem_ptr = MEM_SIZE - ((usz)tok.repeats - mem_ptr);
-				}
-			case PRINT:
-				for (usz j = 0; j < tok.repeats; j++) putchar(mem[mem_ptr]);
-				debug("%c", mem[mem_ptr]);
-			case READ: abort();
-			case LOOP_S:
-				if (mem[mem_ptr] != 0) break;
+		case GET:
+			tok = prog.get(prog_idx);
+			debug("Prog idx: %s", prog_idx);
+			debug("Token: %s %s", tok.type, tok.repeats);
+			prog_idx ++;
+			nextcase tok.type;
+		case INC:
+			mem[mem_ptr] += tok.repeats;
+			nextcase GET;
+		case DEC:
+			mem[mem_ptr] -= tok.repeats;
+			nextcase GET;
+		case NEXT:
+			mem_ptr += tok.repeats;
+			// if (mem_ptr >= MEM_SIZE) mem_ptr -= MEM_SIZE;
+			nextcase GET;
+		case PREV:
+			//if (mem_ptr >= tok.repeats)
+			{
+				mem_ptr -= tok.repeats;
+			}
+			/*else
+			{
+				abort();
+				// TODO: probably wrong
+				mem_ptr = MEM_SIZE - ((usz)tok.repeats - mem_ptr);
+			}*/
+			nextcase GET;
+		case PRINT:
+			for (usz j = 0; j < tok.repeats; j++) io::putchar(mem[mem_ptr]);
+			debug("%c", mem[mem_ptr]);
+			nextcase GET;
+		case READ:
+			mem[mem_ptr] = io::stdout().read_byte()!!;
+			nextcase GET;
+		case LOOP_S:
+			if (mem[mem_ptr] == 0) {
 				usz num = 1;
+				prog_idx --;
 				while (num != 0)
 				{
-					i++;
-					switch (prog[i].type)
+					prog_idx++;
+					switch (prog[prog_idx].type)
 					{
 						case LOOP_S:
 							num ++;
@@ -96,14 +112,17 @@ abort();
 							break;
 					}
 				}
-				debug("jumped forward to %s", i);
-			case LOOP_E:
-				if (mem[mem_ptr] == 0) break;
+				debug("jumped forward to %s", prog_idx);
+			}
+			nextcase GET;
+		case LOOP_E:
+			if (mem[mem_ptr] != 0) {
 				usz num = 1;
+				prog_idx --;
 				while (num != 0)
 				{
-					i--;
-					switch (prog[i].type)
+					prog_idx --;
+					switch (prog[prog_idx].type)
 					{
 						case LOOP_S:
 							num --;
@@ -113,9 +132,12 @@ abort();
 							break;
 					}
 				}
-				debug("jumped backward to %s", i);
-		}
+				debug("jumped backward to %s", prog_idx);
+			}
+			nextcase GET;
+		case EOF: break;
 	}
+	//}
 
 	return 0;
 }
