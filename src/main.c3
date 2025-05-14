@@ -2,10 +2,11 @@ module brainfuck;
 import std::io;
 import std::collections::list;
 
-def Program = List(<Token>);
+alias Program = List {Token};
 
 enum TokenType : char (char tok)
 {
+	// READ = '\0',
 	INC = '+',
 	DEC = '-',
 	NEXT = '>',
@@ -14,34 +15,34 @@ enum TokenType : char (char tok)
 	READ = ',',
 	LOOP_S = '[',
 	LOOP_E = ']',
+	// Don't check for i < array_len each time, instead append EOF to end of instructions and make it call break;
+	// EOF = '\0',
 }
 
 struct Token
 {
-//	union
-//	{
-		/*usz*/ushort repeats;
-//		usz matching_idx;
-//	}
+	char repeats;
 	TokenType type;
 }
 
 const MEM_SIZE = 30000;
 
-usz prog_ptr;
+usz mem_ptr;
 char[MEM_SIZE] mem;
+
+extern fn CInt putchar(char ch);
 
 fn int main(String[] args)
 {
 	String input = "++++++++[>+++++++++>+++++++++++++>++++++>++++>+++++++++++<<<<<-]>.>---.+++++++..+++.>----.>.>-.<<<.+++.------.--------.>>+.";
 	Program prog;
-	prog.new_init();
+	prog.init(allocator::mem);
 	defer prog.free();
 
 
 	foreach (ch : input)
 	{
-		if (prog.len() > 0 && prog.last()!!.type.tok == ch && ch != '[' && ch != ']')
+		if (prog.len() > 0 && prog[^1].type.tok == ch && ch != '[' && ch != ']' && prog[^1].repeats < char.max)
 		{
 			prog[^1].repeats ++;
 		}
@@ -54,29 +55,34 @@ fn int main(String[] args)
 	for (usz i = 0, usz len = prog.len(); i < len; i++)
 	{
 		Token tok = prog[i];
-		debug("Token type at %s: %s, %s", i, tok.type, tok.repeats);
+		debug("Prog ptr: %s", mem_ptr);
 		debug("Mem: %s", mem[:20]);
+		debug("Token type at %s: %s, %s", i, tok.type, tok.repeats);
 		switch (tok.type)
 		{
-			case INC: mem[prog_ptr] = (char)(mem[prog_ptr] + tok.repeats);
-			case DEC: mem[prog_ptr] -= (char)(mem[prog_ptr] - tok.repeats);
+			case INC: mem[mem_ptr] += tok.repeats;
+			case DEC: mem[mem_ptr] -= tok.repeats;
 			case NEXT:
-				prog_ptr += tok.repeats;
-				if (prog_ptr > MEM_SIZE) prog_ptr -= MEM_SIZE;
+				mem_ptr += tok.repeats;
+				if (mem_ptr >= MEM_SIZE) mem_ptr -= MEM_SIZE;
 			case PREV:
-				if (tok.repeats >= inst_ptr)
+				if (mem_ptr >= tok.repeats)
 				{
-					prog_ptr -= tok.repeats;
+					mem_ptr -= tok.repeats;
 				}
 				else
 				{
-					prog_ptr = MEM_SIZE - (usz)tok.repeats + prog_ptr;
+abort();
+					// TODO: probably wrong
+					mem_ptr = MEM_SIZE - ((usz)tok.repeats - mem_ptr);
 				}
-			case PRINT: debug("%c", mem[prog_ptr]);;
-			case READ: unreachable();
+			case PRINT:
+				for (usz j = 0; j < tok.repeats; j++) putchar(mem[mem_ptr]);
+				debug("%c", mem[mem_ptr]);
+			case READ: abort();
 			case LOOP_S:
-				if (mem[prog_ptr] != 0) break;
-				isz num = 1;
+				if (mem[mem_ptr] != 0) break;
+				usz num = 1;
 				while (num != 0)
 				{
 					i++;
@@ -92,8 +98,8 @@ fn int main(String[] args)
 				}
 				debug("jumped forward to %s", i);
 			case LOOP_E:
-				if (mem[prog_ptr] == 0) break;
-				isz num = 1;
+				if (mem[mem_ptr] == 0) break;
+				usz num = 1;
 				while (num != 0)
 				{
 					i--;
