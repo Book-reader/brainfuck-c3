@@ -42,10 +42,12 @@ fn int main(String[] args)
 {
 	// String input = "++++++++[>+++++++++>+++++++++++++>++++++>++++>+++++++++++<<<<<-]>.>---.+++++++..+++.>----.>.>-.<<<.+++.------.--------.>>+.";
 	String input = (String)file::load(allocator::mem, args[1])!!;
+	// TODO: use the array directly, more speed
 	prog.init_wrapping_array(/*allocator::mem*/null, tok_buf[..]);
 	defer prog.free();
 
 
+	// TODO: statically compute the relative distance between matching '[' and ']' and store in hashmap, so I can just do 'prog_idx += map[prog_idx]' because the key will be its own array index
 	foreach (ch : input)
 	{
 		if (@ok(@enum_from_value(TokenType, tok, ch)) && ch != '\0')
@@ -63,7 +65,7 @@ fn int main(String[] args)
 	prog.push({0, EOF});
 
 	// while OUTER: (true){
-	switch O: (TokenType.GET_) // @jump
+	switch O: (TokenType.GET_) @jump
 	{
 		case GET:
 			prog_idx ++;
