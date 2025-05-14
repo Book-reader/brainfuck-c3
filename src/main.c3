@@ -7,6 +7,7 @@ alias Program = List {Token};
 enum TokenType : char (char tok)
 {
 	GET = '\0',
+	GET_ = '\0',
 	INC = '+',
 	DEC = '-',
 	NEXT = '>',
@@ -33,11 +34,15 @@ Token tok;
 usz prog_idx;
 Program prog;
 
+const TOKEN_BUF_SIZE = 300000;
+
+Token[TOKEN_BUF_SIZE] tok_buf;
+
 fn int main(String[] args)
 {
 	// String input = "++++++++[>+++++++++>+++++++++++++>++++++>++++>+++++++++++<<<<<-]>.>---.+++++++..+++.>----.>.>-.<<<.+++.------.--------.>>+.";
 	String input = (String)file::load(allocator::mem, args[1])!!;
-	prog.init(allocator::mem);
+	prog.init_wrapping_array(/*allocator::mem*/null, tok_buf[..]);
 	defer prog.free();
 
 
@@ -58,13 +63,30 @@ fn int main(String[] args)
 	prog.push({0, EOF});
 
 	// while OUTER: (true){
-	switch (TokenType.GET) @jump
+	switch O: (TokenType.GET_) // @jump
 	{
 		case GET:
+			prog_idx ++;
+			nextcase;
+		case GET_:
 			tok = prog.get(prog_idx);
 			debug("Prog idx: %s", prog_idx);
 			debug("Token: %s %s", tok.type, tok.repeats);
-			prog_idx ++;
+			// prog_idx ++;
+			/*switch (tok.type)
+			{
+				case INC:
+					nextcase O: INC;
+				case DEC:
+					nextcase O: DEC;
+				case NEXT:
+					nextcase O: NEXT;
+				case PREV:
+					nextcase O: PREV;
+				case PRINT:
+					nextcase O: PRINT;
+				case READ: nextcase O: READ;
+			}*/
 			nextcase tok.type;
 		case INC:
 			mem[mem_ptr] += tok.repeats;
@@ -98,7 +120,7 @@ fn int main(String[] args)
 		case LOOP_S:
 			if (mem[mem_ptr] == 0) {
 				usz num = 1;
-				prog_idx --;
+				//prog_idx --;
 				while (num != 0)
 				{
 					prog_idx++;
@@ -118,7 +140,7 @@ fn int main(String[] args)
 		case LOOP_E:
 			if (mem[mem_ptr] != 0) {
 				usz num = 1;
-				prog_idx --;
+				//prog_idx --;
 				while (num != 0)
 				{
 					prog_idx --;
@@ -135,11 +157,8 @@ fn int main(String[] args)
 				debug("jumped backward to %s", prog_idx);
 			}
 			nextcase GET;
-		case EOF: break;
+		case EOF: return 0;
 	}
-	//}
-
-	return 0;
 }
 
 macro debug(...)
