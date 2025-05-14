@@ -38,6 +38,7 @@ const TOKEN_BUF_SIZE = 300000;
 
 Token[TOKEN_BUF_SIZE] tok_buf;
 
+// TODO: try rewriting it as a glfw shader and see what happens
 fn int main(String[] args)
 {
 	// String input = "++++++++[>+++++++++>+++++++++++++>++++++>++++>+++++++++++<<<<<-]>.>---.+++++++..+++.>----.>.>-.<<<.+++.------.--------.>>+.";
@@ -113,11 +114,11 @@ fn int main(String[] args)
 			}*/
 			nextcase GET;
 		case PRINT:
-			for (usz j = 0; j < tok.repeats; j++) io::putchar(mem[mem_ptr]);
+			for (usz j = 0; j < tok.repeats; j++) io::putchar(mem[mem_ptr]) @inline;
 			debug("%c", mem[mem_ptr]);
 			nextcase GET;
 		case READ:
-			mem[mem_ptr] = io::stdout().read_byte()!!;
+			mem[mem_ptr] = io::stdin()@inline .read_byte()@inline!!;
 			nextcase GET;
 		case LOOP_S:
 			if (mem[mem_ptr] == 0) {
