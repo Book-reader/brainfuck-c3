@@ -17,6 +17,7 @@ enum TokenType : char (char tok)
 	LOOP_S = '[',
 	LOOP_E = ']',
 	// Don't check for i < array_len each time, instead append EOF to end of instructions and make it call break;
+	SET_0 = '\0',
 	EOF = '\0',
 }
 
@@ -91,8 +92,16 @@ fn int main(String[] args)
 			@do_thing(prog, prog_idx, PRINT);
 			nextcase '\0';
 		case '[':
-			loops.push(prog_idx);
-			prog[prog_idx ++] = {1, LOOP_S};
+			if (@unlikely(input_idx + 2 < input.len && input[input_idx + 1] == '-' && input[input_idx + 2] == ']'))
+			{
+				prog[prog_idx ++] = {1, SET_0};
+				input_idx += 2;
+			}
+			else
+			{
+				loops.push(prog_idx);
+				prog[prog_idx ++] = {1, LOOP_S};
+			}
 			nextcase '\0';
 		case ']':
 			usz matching_start = loops.pop()!!;
@@ -148,6 +157,9 @@ fn int main(String[] args)
 				prog_idx = jmp_idxs[prog_idx];
 				debug("jumped backward to %s", prog_idx);
 			}
+			nextcase GET;
+		case SET_0:
+			mem[mem_ptr] = 0;
 			nextcase GET;
 		case EOF: return 0;
 	}
