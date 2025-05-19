@@ -1,8 +1,8 @@
 module brainfuck;
 import std::io;
 import std::collections::list;
-
-alias Program = List {Token};
+import std::collections::map;
+// import intmap;
 
 enum TokenType : char (char tok)
 {
@@ -20,6 +20,8 @@ enum TokenType : char (char tok)
 	EOF = '\0',
 }
 
+alias alloc = allocator::mem;
+
 struct Token
 {
 	char repeats;
@@ -31,39 +33,59 @@ const MEM_SIZE = 30000;
 usz mem_ptr;
 char[MEM_SIZE] mem;
 Token tok;
-usz prog_idx;
-Program prog;
+// Token[TOKEN_BUF_SIZE] prog;
 
 const TOKEN_BUF_SIZE = 300000;
 
-Token[TOKEN_BUF_SIZE] tok_buf;
+List {usz} loops;
 
 // TODO: try rewriting it as a glfw shader and see what happens
 fn int main(String[] args)
 {
 	// String input = "++++++++[>+++++++++>+++++++++++++>++++++>++++>+++++++++++<<<<<-]>.>---.+++++++..+++.>----.>.>-.<<<.+++.------.--------.>>+.";
-	String input = (String)file::load(allocator::mem, args[1])!!;
+	String input = (String)file::load(alloc, args[1])!!;
 	// TODO: use the array directly, more speed
-	prog.init_wrapping_array(/*allocator::mem*/null, tok_buf[..]);
-	defer prog.free();
+	// prog.init_wrapping_array(/*allocator::mem*/null, tok_buf[..]);
+	// defer prog.free();
+	Token[TOKEN_BUF_SIZE] prog @noinit;
+	usz[TOKEN_BUF_SIZE] jmp_idxs @noinit;
+	usz prog_idx;
 
+	loops.init(alloc);
 
-	// TODO: statically compute the relative distance between matching '[' and ']' and store in hashmap, so I can just do 'prog_idx += map[prog_idx]' because the key will be its own array index
+	// TODO: statically compute the relative distance between matching '[' and ']' and store in hashmap, so I can just do 'prog_idx = map[prog_idx]' because the key will be its own array index
 	foreach (ch : input)
 	{
 		if (@ok(@enum_from_value(TokenType, tok, ch)) && ch != '\0')
 		{
-			if (prog.len() > 0 && prog[^1].type.tok == ch && ch != '[' && ch != ']' && prog[^1].repeats < char.max)
+			if (prog_idx > 0 && prog[prog_idx - 1].type.tok == ch && ch != '[' && ch != ']' && prog[prog_idx - 1].repeats < char.max)
 			{
-				prog[^1].repeats ++;
+				prog[prog_idx - 1].repeats ++;
 			}
 			else
 			{
-				prog.push({1, @enum_from_value(TokenType, tok, ch)!!});
+				if (ch == '[')
+				{
+					loops.push(prog_idx);
+					// prog[prog_idx ++] = {1, .type = @enum_from_value(TokenType, tok, ch)!!};
+				}
+				else if (ch == ']')
+				{
+					usz matching_start = loops.pop()!!;
+					jmp_idxs[matching_start] = prog_idx;
+					jmp_idxs[prog_idx] = matching_start;
+					// prog[prog_idx ++] = {1, .type = @enum_from_value(TokenType, tok, ch)!!};
+				}
+				//else
+				//{
+				prog[prog_idx ++] = {1, @enum_from_value(TokenType, tok, ch)!!};
+				//}
 			}
 		}
 	}
-	prog.push({0, EOF});
+	loops.free();
+	prog[prog_idx] = {0, EOF};
+	prog_idx = 0;
 
 	// while OUTER: (true){
 	switch O: (TokenType.GET_) @jump
@@ -72,30 +94,15 @@ fn int main(String[] args)
 			prog_idx ++;
 			nextcase;
 		case GET_:
-			tok = prog.get(prog_idx);
+			tok = prog[prog_idx];
 			debug("Prog idx: %s", prog_idx);
 			debug("Token: %s %s", tok.type, tok.repeats);
-			// prog_idx ++;
-			/*switch (tok.type)
-			{
-				case INC:
-					nextcase O: INC;
-				case DEC:
-					nextcase O: DEC;
-				case NEXT:
-					nextcase O: NEXT;
-				case PREV:
-					nextcase O: PREV;
-				case PRINT:
-					nextcase O: PRINT;
-				case READ: nextcase O: READ;
-			}*/
 			nextcase tok.type;
 		case INC:
-			mem[mem_ptr] += tok.repeats;
+			mem[mem_ptr] += tok.repeats;// (char)(tok.repeats % char.max);
 			nextcase GET;
 		case DEC:
-			mem[mem_ptr] -= tok.repeats;
+			mem[mem_ptr] -= tok.repeats;// (char)(tok.repeats % char.max);
 			nextcase GET;
 		case NEXT:
 			mem_ptr += tok.repeats;
@@ -103,9 +110,9 @@ fn int main(String[] args)
 			nextcase GET;
 		case PREV:
 			//if (mem_ptr >= tok.repeats)
-			{
+			//{
 				mem_ptr -= tok.repeats;
-			}
+			//}
 			/*else
 			{
 				abort();
@@ -115,14 +122,14 @@ fn int main(String[] args)
 			nextcase GET;
 		case PRINT:
 			for (usz j = 0; j < tok.repeats; j++) io::putchar(mem[mem_ptr]) @inline;
-			debug("%c", mem[mem_ptr]);
+			debug("printing: %d", mem[mem_ptr]);
 			nextcase GET;
 		case READ:
-			mem[mem_ptr] = io::stdin()@inline .read_byte()@inline!!;
+			mem[mem_ptr] = io::stdin()@inline.read_byte()@inline!!;
 			nextcase GET;
 		case LOOP_S:
 			if (mem[mem_ptr] == 0) {
-				usz num = 1;
+				/*usz num = 1;
 				//prog_idx --;
 				while (num != 0)
 				{
@@ -136,13 +143,14 @@ fn int main(String[] args)
 						default:
 							break;
 					}
-				}
+				}*/
+				prog_idx = jmp_idxs[prog_idx];
 				debug("jumped forward to %s", prog_idx);
 			}
 			nextcase GET;
 		case LOOP_E:
 			if (mem[mem_ptr] != 0) {
-				usz num = 1;
+				/*usz num = 1;
 				//prog_idx --;
 				while (num != 0)
 				{
@@ -156,7 +164,8 @@ fn int main(String[] args)
 						default:
 							break;
 					}
-				}
+				}*/
+				prog_idx = jmp_idxs[prog_idx];
 				debug("jumped backward to %s", prog_idx);
 			}
 			nextcase GET;
